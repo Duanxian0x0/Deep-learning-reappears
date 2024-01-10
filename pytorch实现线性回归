@@ -1,0 +1,81 @@
+"""
+代码来源:《动手实现深度学习》的线性回归
+复现时间：2024.1.9
+复现用时：20min
+注释：Duanxian0x0
+"""
+
+
+import torch
+import numpy as np
+import random
+
+num_inputs = 2  # 输入特征数为2
+num_examples = 1000  # 输入的样本个数
+true_w = [2, -3.4]  # 真实的权重值
+true_b = 4.2  # 真实的偏置项b
+features = torch.randn(num_examples, num_inputs, dtype=torch.float32)  # 代表了每行有两个特征的1000*2的特征矩阵
+labels = true_w[0] * features[:, 0] + true_w[1] * features[:, 1] + true_b  # labels代表生成的标签也就是真实值矩阵
+labels += torch.tensor(np.random.normal(0, 0.01, size=labels.size()), dtype=torch.float32)  # 给labels加入真实的数据扰动项e
+print(features[0], labels[0])
+
+'''
+说明:
+batch_size:指每次批量读取小样本数据的个数
+features:指样本本身矩阵
+labels:指样本标签集
+'''
+
+
+def data_iter(batch_size, features, labels):
+    num_examples = len(features)
+    indices = list(range(num_examples))
+    random.shuffle(indices)  # random.shuffle函数用于将一个列表中的元素打乱
+    for i in range(0, num_examples, batch_size):  # range(start,end,step)函数,这里指每次批量选取的特征
+        j = torch.LongTensor(indices[i:min(i + batch_size, num_examples)])  # 这里的LongTensor是浮点型
+        yield features.index_select(0, j), labels.index_select(0, j)  # index_select(dim,index)函数指从第0维挑选第j个数据
+        # yield: 带有yield的函数是一个迭代器，函数返回某个值时，会停留在某个位置，返回函数值后，会在前面停留的位置继续执行，直到程序结束
+
+batch_size = 10
+for X,y in data_iter(batch_size,features, labels):
+    print(X,y)
+    break
+
+w = torch.tensor(np.random.normal(0, 0.01, (num_inputs, 1)), dtype=torch.float32)
+b = torch.zeros(1, dtype=torch.float32)
+w.requires_grad_(requires_grad=True)
+b.requires_grad_(requires_grad=True)
+'''
+requires_grad 表达的含义是，这一参数是否保留（或者说持有，即在前向传播完成后，
+是否在显存中记录这一参数的梯度，而非立即释放）梯度，等待优化器执行optim.step()
+更新参数。 
+'''
+
+def linreg(X,w,b):#表示进行线性加权和X*w+b
+    return torch.mm(X,w)+b#torch.mm()函数代表了矩阵乘法
+
+def squared_loss(y_hat,y):
+    return (y_hat-y.view(y_hat.size()))**2/2#.view(raw,col)函数相当于自动reshape（调整）tensor的形状为raw行,col列,特殊的参数为-1自动调整
+
+def sgd(params, lr, batch_size):
+    for param in params:
+        param.data -= lr * param.grad / batch_size # 注意这里更改param时用的param.data
+
+
+lr = 0.03 #学习率
+num_epochs = 3 #学习周期
+net = linreg
+loss = squared_loss
+
+for epoch in range(num_epochs):
+    for X,y in data_iter(batch_size,features,labels):
+        l = loss(net(X,w,b),y).sum()
+        l.backward()
+        sgd([w,b],lr,batch_size)
+
+        w.grad.data.zero_()#.data是为了将tensor变为data，也就是张量变标量
+        b.grad.data.zero_()
+    train_l = loss(net(features,w,b),labels)#计算训练损失
+    print('epoch %d, loss %f' % (epoch+1, train_l.mean().item()))#.item()函数其实是一个显示精度浮点类函数,不加item显示为1.22，加则显示为1.22002365
+print(true_w, '\n', w)
+print(true_b, '\n', b)
